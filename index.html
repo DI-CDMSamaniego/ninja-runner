@@ -72,6 +72,11 @@ canvas#c{display:block;position:fixed;left:0;top:0;width:100vw;height:calc(100% 
 #toast.on{opacity:1}
 #toast.bad{background:#b3261e}
 .reward{background:#6a2bd1;border-color:#e6d8ff}
+/* attack button (touch devices, only while playing with a weapon equipped) */
+#bAtk{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:18px;width:86px;height:86px;border-radius:50%;pointer-events:auto;touch-action:none;border:3px solid rgba(255,255,255,.92);background:rgba(200,32,26,.82);box-shadow:0 4px 0 rgba(0,0,0,.4);padding:0;display:flex;align-items:center;justify-content:center;-webkit-user-select:none;user-select:none}
+#bAtk canvas{width:62px;height:62px;pointer-events:none}
+#bAtk.cool{background:rgba(120,30,26,.75)}
+#bAtk:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.4)}
 /* ===== AD PLACEHOLDER STYLES (see AdService) ===== */
 #adBanner{position:fixed;left:0;right:0;bottom:0;height:var(--adh);box-sizing:border-box;padding-bottom:env(safe-area-inset-bottom,0px);background:#1c1c22;border-top:1px solid #3a3a46;display:flex;align-items:center;justify-content:center;gap:10px;font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#9a9aab;z-index:20;overflow:hidden}
 .adTag{display:inline-block;background:#ffd23f;color:#222;font:800 11px/1 system-ui,sans-serif;padding:3px 6px;border-radius:4px;letter-spacing:.5px}
@@ -110,6 +115,7 @@ canvas#c{display:block;position:fixed;left:0;top:0;width:100vw;height:calc(100% 
       <div id="shopList"></div>
     </div>
   </div>
+  <button id="bAtk" class="hidden" aria-label="Attack"><canvas id="atkIc" width="124" height="124"></canvas></button>
   <div id="toast"></div>
 </div>
 <div id="adBanner" role="complementary" aria-label="Advertisement"><span class="adTag">Ad</span><span>Ad placeholder &middot; banner 320&times;50</span></div>
@@ -197,7 +203,7 @@ var AdService=(function(){
 (function(){
 'use strict';
 var cv=document.getElementById('c'),ctx=cv.getContext('2d');
-var W=0,H=0,DPR=1,U=1,GROUND=0,MOBILE=false,MIN_VIEW=9.6,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
+var W=0,H=0,DPR=1,U=1,GROUND=0,MOBILE=false,TOUCH=false,MIN_VIEW=10.2,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
 var HS_KEY='ninjaRunnerHighScore',OLD_HS_KEY='stickRunnerHighScore';
 function loadHS(){try{return parseInt(localStorage.getItem(HS_KEY)||localStorage.getItem(OLD_HS_KEY)||'0',10)||0}catch(e){return 0}}
 function saveHS(v){try{localStorage.setItem(HS_KEY,String(v))}catch(e){}}
@@ -217,11 +223,12 @@ function resize(){
   // [view-fix-v9] mobile view adjustments apply ONLY on real touch phones in portrait (touch input AND W<H
   // AND W<=500 CSS px). Every other device/window (desktop of any size/aspect) uses the original rules:
   // U=min(H/12,W/8), PX=2.5, GROUND=0.78H.
-  // On phones: MIN_VIEW=9.6 units across [view-fix-v10] (v9 used 12.25 ~70px ninja; now ~89px tall at 390 wide),
+  // On phones: MIN_VIEW=10.2 units across [view-fix-v11] (v9 12.25 ~70px ninja, v10 9.6 ~89px was too tight;
+  // now ~84px tall at 390 wide = v9 +20%),
   // player moved left (PX = W/U-REACT_SEC*START_SPD clamped 1.4..2.5 -> 1.4, max look-ahead), ground 0.70H.
   PX=2.5;GROUND=H*0.78;
   var touch=false;try{touch=(window.matchMedia&&matchMedia('(pointer: coarse)').matches)||('ontouchstart' in window)||(navigator.maxTouchPoints>0)}catch(e){}
-  MOBILE=touch&&W<H&&W<=500;
+  TOUCH=touch;MOBILE=touch&&W<H&&W<=500;
   if(MOBILE){
     if(W/U<MIN_VIEW)U=W/MIN_VIEW;
     if(W/U<24)PX=Math.max(1.4,Math.min(2.5,W/U-REACT_SEC*START_SPD));
@@ -236,6 +243,16 @@ window.addEventListener('orientationchange',function(){setTimeout(resize,200)});
 /* ===== SHOP ITEMS & SAVE DATA (localStorage) =====
    Points: each coin = COIN_PTS, plus 1 point per DIST_DIV distance points (head-start distance excluded). */
 var COIN_PTS=5,DIST_DIV=10,MAX_BOOST=9,HEAD_DIST=500; // HEAD_DIST 500 world units = +250 score
+/* ===== WEAPONS (shop, buy once, unlimited use) =====
+   kind 'throw' = projectile flying forward (vx units/s relative to the ninja, range in units),
+   kind 'slash' = short arc in front (reach units, lasts dur s). brk = breaks a whole crate stack in one hit
+   (kunai knocks off one box per hit). cd = cooldown in seconds. KILL_BONUS = score per destroyed obstacle. */
+var WEAPONS={
+ kunai: {price:3000,kind:'throw',cd:0.35,vx:22,range:11,brk:false},
+ katana:{price:5000,kind:'slash',cd:0.45,reach:2.7,dur:0.2,brk:true},
+ axe:   {price:7500,kind:'throw',cd:0.5, vx:15,range:15,brk:true}
+};
+var KILL_BONUS=10;
 var RAR={C:{n:'Common',c:'#b7c6d6'},R:{n:'Rare',c:'#4ea8ff'},E:{n:'Epic',c:'#c77dff'},L:{n:'Legendary',c:'#ffc233'}};
 var ITEMS=[
  {id:'o_black', cat:'outfit',name:'Classic Black',price:0,   r:'C',body:'#141418'},
@@ -252,14 +269,17 @@ var ITEMS=[
  {id:'t_sparkle',cat:'trail',name:'Sparkle', price:500, r:'R',kind:'sparkle'},
  {id:'t_snow',   cat:'trail',name:'Snow',    price:1000,r:'E',kind:'snow'},
  {id:'t_fire',   cat:'trail',name:'Fire',    price:2000,r:'L',kind:'fire'},
+ {id:'w_kunai', cat:'weapon',name:'Kunai',      price:WEAPONS.kunai.price, r:'R',wk:'kunai', desc:'Thrown blade. 2-3 hits break a stack'},
+ {id:'w_katana',cat:'weapon',name:'Katana',     price:WEAPONS.katana.price,r:'E',wk:'katana',desc:'Close slash, breaks whole stacks'},
+ {id:'w_axe',   cat:'weapon',name:'Battle Axe', price:WEAPONS.axe.price,   r:'L',wk:'axe',   desc:'Long-range spinning throw, breaks stacks'},
  {id:'b_magnet',cat:'boost',name:'Coin Magnet',price:100,r:'C',key:'magnet',desc:'Pulls coins to you for one run'},
  {id:'b_shield',cat:'boost',name:'Shield',     price:150,r:'R',key:'shield',desc:'Survive one hit'},
  {id:'b_head',  cat:'boost',name:'Head Start', price:250,r:'R',key:'head',  desc:'Start 250 points ahead'}
 ];
 var ITEM={};ITEMS.forEach(function(it){ITEM[it.id]=it});
-var CATS=[['outfit','Ninja outfits',''],['band','Headbands',''],['trail','Trails',''],['boost','Boosts','one-time, used at the start of your next run']];
+var CATS=[['outfit','Ninja outfits',''],['band','Headbands',''],['trail','Trails',''],['weapon','Weapons','buy once, unlimited use: \u2192 key or the attack button'],['boost','Boosts','one-time, used at the start of your next run']];
 var SAVE_KEY='ninjaRunnerSave_v1';
-function defSave(){return {points:0,owned:{o_black:1,h_red:1,t_none:1},equip:{outfit:'o_black',band:'h_red',trail:'t_none'},boosts:{shield:0,magnet:0,head:0},runs:0}}
+function defSave(){return {points:0,owned:{o_black:1,h_red:1,t_none:1},equip:{outfit:'o_black',band:'h_red',trail:'t_none',weapon:''},boosts:{shield:0,magnet:0,head:0},runs:0}}
 function loadSave(){
   var d=defSave();
   try{var s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
@@ -332,16 +352,26 @@ function updWeather(dt){
 }
 
 var state='start',hs=loadHS(),shopFrom='start',lastScore=0,clk=0;
-var p,obs,coins,speed,dist,coinCount,spawnGap,t,lastT=0,particles,trail,trailAcc,deadT,nextType,run;
+var p,obs,coins,speed,dist,coinCount,spawnGap,t,lastT=0,particles,trail,trailAcc,deadT,nextType,run,shots,slash,pops,forceType=null;
 var BASE_SPEED=6,MAX_SPEED=16,GRAV=38,JUMP_V=-14.5,DJ_V=-14.5,SLIDE_TIME=0.65,MAX_JUMPS=2;
 // single jump peak = JUMP_V^2/(2*GRAV) ~ 2.77 units; tall stack is 3.2 so it needs the double jump
 var BOX_W=1.3,BOX_H=1.6;
+/* THREE-BOX STACK ('stack3'): 3 x 1.35 = 4.05 tall (two-box stack is 3.2). Single jump peak 2.77 can't clear it; a
+   double jump (peak 5.53) clears it when the take-off is 0.37-0.83 s (speed 6) / 0.37-1.03 s (speed 16) before
+   reaching it, best with the 2nd jump near the top of the first. Appears from STACK3_PTS score.
+   On phones (short look-ahead) it spawns further out so it arrives STACK3_LEAD s after spawning, with an
+   edge warning marker while it is still off-screen.
+   FLYING SHURIKEN ('shur'): 0.6 x 0.6 hitbox, flies SHUR_EXTRA (30%) faster than the ground scroll, spawned further
+   out so it reaches the ninja at the same moment a ground obstacle spawned at the screen edge would (normal spacing).
+   high: 1.25..1.85 (above slide height 0.9, below standing 2.2) -> slide (or jump); low: 0.15..0.75 -> jump. */
+var BOX3_H=1.35,STACK3_PTS=2500,STACK3_LEAD=0.95,SHUR_PTS=300,SHUR_EXTRA=0.3,SHUR_S=0.6,SHUR_HI=1.25,SHUR_LO=0.15;
 
 function reset(){
   p={x:PX,y:0,vy:0,onGround:true,slide:0,phase:0,jumps:0,djT:9};
-  obs=[];coins=[];particles=[];trail=[];trailAcc=0;
+  obs=[];coins=[];particles=[];trail=[];trailAcc=0;shots=[];slash=null;pops=[];
   speed=BASE_SPEED;dist=0;coinCount=0;spawnGap=8;t=0;nextType=pickType(0);
-  run={shield:0,magnet:0,inv:0,headDist:0,earned:0,banner:0,bannerTxt:'',rewarded:false};
+  run={shield:0,magnet:0,inv:0,headDist:0,earned:0,banner:0,bannerTxt:'',rewarded:false,bonus:0,kills:0,cd:0};
+  p.atkT=0;
 }
 // start a run: consumes one of each boost the player bought in the shop
 function startRun(){
@@ -377,7 +407,11 @@ function handleStartRestart(){
 }
 
 // tall stack: never in the first 150 pts, then 10% rising to 30% by ~1150 pts
+// flying shuriken from 300 pts (8% rising to 24%), three-box stack from 2500 pts (6% rising to 16%)
 function pickType(s){
+  if(forceType){var ft=forceType;forceType=null;return ft}
+  var st3=s<STACK3_PTS?0:Math.min(0.16,0.06+(s-STACK3_PTS)/25000),shP=s<SHUR_PTS?0:Math.min(0.24,0.08+(s-SHUR_PTS)/12500);
+  if(st3||shP){var r0=Math.random();if(r0<st3)return 'stack3';if(r0<st3+shP)return 'shur'}
   var stackP=s<150?0:Math.min(0.30,0.10+(s-150)/5000);
   var r=Math.random();
   if(r<stackP)return 'stack';
@@ -388,27 +422,43 @@ function pickType(s){
 // gap = seconds of travel between leading edges (time-based, so it scales with speed)
 // (types keep their old names: crate = wooden crate, stack = two crates, cone = spike trap, beam = hanging bamboo log)
 function spawn(){
-  var x=dist+W/U+2,type=nextType,o;
-  if(type==='stack') o={type:'stack',x:x,w:BOX_W,h:BOX_H*2,y0:0};
+  var x=dist+W/U+2,type=nextType,o,shDelay=0;
+  if(type==='stack') o={type:'stack',x:x,w:BOX_W,h:BOX_H*2,y0:0,boxes:2,bh:BOX_H};
+  else if(type==='stack3'){
+    if(MOBILE&&W/U<20)x=Math.max(x,dist+PX+0.35+STACK3_LEAD*speed); // phones: spawn further out (edge marker shows it)
+    o={type:'stack3',x:x,w:BOX_W,h:BOX3_H*3,y0:0,boxes:3,bh:BOX3_H};
+  }else if(type==='shur'){var hi=Math.random()<0.5;
+    // starts further right so it arrives together with a ground object spawned at x (x stays the spacing reference)
+    var sD=(x-dist-PX)*(1+SHUR_EXTRA),sNeed=W/U-PX+0.4*(1+SHUR_EXTRA)*speed;
+    // phones: start further out so the edge marker shows >= 0.4 s; later spacing is pushed back by the same delay
+    if(MOBILE&&W/U<20&&sD<sNeed){shDelay=(sNeed-sD)/((1+SHUR_EXTRA)*speed);sD=sNeed}
+    o={type:'shur',x:dist+PX+sD,w:SHUR_S,h:SHUR_S,y0:hi?SHUR_HI:SHUR_LO,hi:hi,rot:Math.random()*6.28};
+  }
   else if(type==='crate') o={type:'crate',x:x,w:1.0,h:1.0,y0:0};
   else if(type==='cone') o={type:'cone',x:x,w:0.8,h:1.1,y0:0};
   else o={type:'beam',x:x,w:1.6,h:0.5,y0:1.25}; // gap under = 1.25 > slide height 0.9, < stand 2.2
   obs.push(o);
   // optional coins (above stack they need the double jump)
-  if(Math.random()<0.55){
-    var cy=o.type==='beam'?0.45:(o.type==='stack'?4.4:2.9), n=3;
+  if(o.type!=='shur'&&Math.random()<0.55){
+    var cy=o.type==='beam'?0.45:(o.type==='stack'?4.4:(o.type==='stack3'?4.9:2.9)), n=3;
     for(var i=0;i<n;i++) coins.push({x:x-0.9+i*0.9+o.w/2,y:cy,got:false});
   }
   nextType=pickType(score());
   // single jump airtime ~0.76s; worst-case double-jump airtime ~1.3s
   var minSec=0.95;
   if(type==='stack')minSec=1.75;          // land from double jump, then react
+  if(type==='stack3')minSec=1.9;
   if(nextType==='stack')minSec=Math.max(minSec,1.5); // land previous + early take-off for stack
+  if(nextType==='stack3')minSec=Math.max(minSec,1.6);
+  if(nextType==='shur'&&(type==='stack'||type==='stack3'))minSec=Math.max(minSec,2.0); // land the double jump first
   // [view-fix-v9] reduced view (touch phones in portrait only): the obstacle before a stack must be past the player
   // before the stack scrolls into view, so the whole visible look-ahead is free for the stack
   if(MOBILE&&nextType==='stack'&&W/U<20)minSec=Math.max(minSec,(W/U-PX+o.w+1.5)/speed);
-  var extra=Math.random()*(type==='stack'||nextType==='stack'?0.8:1.1);
-  spawnGap=x+speed*(minSec+extra)+o.w-(W/U+2);
+  // phones: the obstacle before a three-box stack is passed (and landed) before the stack even spawns
+  if(MOBILE&&nextType==='stack3'&&W/U<20)minSec=Math.max(minSec,(W/U+2-PX+0.35)/speed+(type==='stack'||type==='stack3'?1.0:0.5));
+  var big=type==='stack'||nextType==='stack'||type==='stack3'||nextType==='stack3';
+  var extra=Math.random()*(big?0.8:1.1);
+  spawnGap=x+speed*(minSec+extra+shDelay)+o.w-(W/U+2);
 }
 
 function hit(a,o){
@@ -430,9 +480,13 @@ function update(dt){
   if(run.inv>0)run.inv-=dt;
   if(run.banner>0)run.banner-=dt;
   if(dist>=spawnGap) spawn();
+  if(run.cd>0)run.cd-=dt;
+  if(p.atkT>0)p.atkT-=dt;
+  updWeapons(dt);
   var b=pBox();
   for(var i=obs.length-1;i>=0;i--){
     var o=obs[i];
+    if(o.type==='shur'){o.x-=SHUR_EXTRA*speed*dt;o.rot-=dt*15}
     if(o.x-dist<-3){obs.splice(i,1);continue}
     if(!o.dead&&run.inv<=0&&hit(b,o)){
       if(run.shield>0){run.shield=0;o.dead=true;run.inv=1.0;burst(p.x,p.y+1.1,'#7cc4ff',18);run.banner=1.4;run.bannerTxt='Shield saved you!'}
@@ -446,8 +500,45 @@ function update(dt){
     if(!c.got&&Math.abs(cx-p.x)<0.6&&c.y>b.y0-0.3&&c.y<b.y1+0.3){c.got=true;coinCount++;burst(cx,c.y,rgb(pal.coin),6)}
   }
   updParticles(dt);updTrail(dt,true);
+  for(var pq=pops.length-1;pq>=0;pq--){pops[pq].l-=dt;pops[pq].y+=dt*1.6;if(pops[pq].l<=0)pops.splice(pq,1)}
 }
-function score(){return Math.floor(dist/2)+coinCount*10}
+function score(){return Math.floor(dist/2)+coinCount*10+(run&&run.bonus||0)}
+
+/* ===== WEAPON ATTACKS ===== */
+function weapon(){var id=save.equip.weapon;return id&&ITEM[id]&&save.owned[id]?ITEM[id]:null}
+function attack(){
+  if(state!=='play')return false;
+  var w=weapon();if(!w||run.cd>0)return false;
+  var S=WEAPONS[w.wk],low=p.slide>0&&p.onGround;
+  run.cd=S.cd;p.atkT=0.22;
+  if(S.kind==='slash')slash={t:S.dur,d:S.dur,reach:S.reach,hit:[]};
+  else shots.push({k:w.wk,x:p.x+0.45,x0:p.x+0.45,y:p.y+(low?0.55:1.35),vx:S.vx,range:S.range,brk:S.brk,rot:0});
+  return true;
+}
+function boxHit(ax0,ax1,ay0,ay1,o){var ox=o.x-dist;return ax0<ox+o.w&&ax1>ox&&ay0<o.y0+o.h&&ay1>o.y0}
+function debris(o,n){
+  var cols=o.type==='cone'||o.type==='shur'?[rgb(pal.steel),rgb(pal.woodDark)]:(o.type==='beam'?[rgb(pal.log),rgb(pal.logDark)]:[rgb(pal.wood),rgb(pal.woodDark)]);
+  var ox=o.x-dist;
+  for(var i=0;i<n;i++)particles.push({x:ox+Math.random()*o.w,y:o.y0+Math.random()*o.h,vx:(Math.random()-0.3)*7-speed*0.35,vy:2+Math.random()*7,l:0.5+Math.random()*0.5,c:cols[i%2]});
+}
+function damage(o,brk){
+  var idx=obs.indexOf(o);if(idx<0)return;
+  if(!brk&&o.boxes>1){ // kunai: knock off the top box, crack the rest
+    var top={type:o.type,x:o.x,w:o.w,y0:o.y0+o.h-o.bh,h:o.bh};debris(top,12);
+    o.boxes--;o.h-=o.bh;o.dmg=(o.dmg||0)+1;return}
+  obs.splice(idx,1);debris(o,o.boxes?10+o.boxes*6:14);
+  run.bonus+=KILL_BONUS;run.kills++;pops.push({x:o.x-dist+o.w/2,y:o.y0+o.h+0.3,l:0.8});
+}
+function updWeapons(dt){
+  var i,j,o;
+  for(i=shots.length-1;i>=0;i--){var q=shots[i];q.x+=q.vx*dt;q.rot+=dt*(q.k==='axe'?-18:0);
+    if(q.x-q.x0>q.range||q.x>W/U+1){shots.splice(i,1);continue}
+    var tgt=null;for(j=0;j<obs.length;j++){o=obs[j];if(!o.dead&&boxHit(q.x-0.4,q.x+0.4,q.y-0.9,q.y+0.9,o)&&(!tgt||o.x<tgt.x))tgt=o}
+    if(tgt){damage(tgt,q.brk);shots.splice(i,1)}}
+  if(slash){slash.t-=dt;
+    for(j=obs.length-1;j>=0;j--){o=obs[j];if(!o.dead&&slash.hit.indexOf(o)<0&&boxHit(p.x+0.1,p.x+slash.reach,p.y-0.3,p.y+2.9,o)){slash.hit.push(o);damage(o,true)}}
+    if(slash.t<=0)slash=null}
+}
 function pointsFor(){return coinCount*COIN_PTS+Math.floor(Math.max(0,Math.floor((dist-run.headDist)/2))/DIST_DIV)}
 function die(){
   state='over';deadT=performance.now();
@@ -501,6 +592,7 @@ function ninjaGeom(x,gy,u,P){
       arms:[[-1.25+s*0.12,0.42,-1.45+s*0.12,0.38],[-1.12+c2*0.12,0.42,-1.32+c2*0.12,0.38]]};
     G.head=[G.sh[0]+0.18*u,G.sh[1]-0.3*u];
   }
+  if(P.atk){if(P.k==='slide')G.arms[1]=[2.2,0.4,2.0,0.35];else G.arms[0]=[1.75,0.42,1.6,0.38]} // throwing / slashing arm forward
   return G;
 }
 function drawNinja(g,x,gy,u,P,C){
@@ -544,9 +636,12 @@ function drawNinja(g,x,gy,u,P,C){
   g.restore();
 }
 function curPose(){
-  if(p.slide>0&&p.onGround)return {k:'slide',tt:clk};
-  if(!p.onGround)return p.jumps>=2?{k:'dj',rot:Math.min(1,p.djT/0.42)*Math.PI*2,tt:clk}:{k:'jump',tt:clk};
-  return {k:'run',ph:p.phase,tt:clk};
+  var P;
+  if(p.slide>0&&p.onGround)P={k:'slide',tt:clk};
+  else if(!p.onGround)P=p.jumps>=2?{k:'dj',rot:Math.min(1,p.djT/0.42)*Math.PI*2,tt:clk}:{k:'jump',tt:clk};
+  else P={k:'run',ph:p.phase,tt:clk};
+  if(p.atkT>0&&P.k!=='dj')P.atk=1;
+  return P;
 }
 function drawPlayer(){
   var a=state==='over'?0.35:1;
@@ -603,12 +698,48 @@ function drawCrate(x,y,w,h){
   ctx.fillRect(x+m*0.5-n/2,y+m*0.5-n/2,n,n);ctx.fillRect(x+w-m*0.5-n/2,y+m*0.5-n/2,n,n);ctx.fillRect(x+m*0.5-n/2,y+h-m*0.5-n/2,n,n);ctx.fillRect(x+w-m*0.5-n/2,y+h-m*0.5-n/2,n,n);
   ctx.strokeStyle=rgb(pal.outline);ctx.lineWidth=lw;ctx.strokeRect(x,y,w,h);
 }
+// four-point shuriken centred at (cx,cy), radius r, spin rot
+function drawShuriken(g,cx,cy,r,rot,fill,ol,hl){
+  g.save();g.translate(cx,cy);g.rotate(rot);g.lineJoin='miter';
+  g.beginPath();
+  for(var i=0;i<4;i++){var a=i*Math.PI/2,b=a+Math.PI/4;
+    g.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+    g.quadraticCurveTo(Math.cos(b-0.25)*r*0.42,Math.sin(b-0.25)*r*0.42,Math.cos(b)*r*0.3,Math.sin(b)*r*0.3);
+    g.quadraticCurveTo(Math.cos(b+0.15)*r*0.38,Math.sin(b+0.15)*r*0.38,Math.cos(a+Math.PI/2)*r,Math.sin(a+Math.PI/2)*r)}
+  g.closePath();g.fillStyle=fill;g.fill();g.strokeStyle=ol;g.lineWidth=Math.max(1.2,r*0.1);g.stroke();
+  if(hl){g.strokeStyle=hl;g.lineWidth=Math.max(1,r*0.07);for(var k=0;k<4;k++){var c=k*Math.PI/2;g.beginPath();g.moveTo(Math.cos(c)*r*0.3,Math.sin(c)*r*0.3);g.lineTo(Math.cos(c)*r*0.85,Math.sin(c)*r*0.85);g.stroke()}}
+  g.fillStyle=ol;g.beginPath();g.arc(0,0,r*0.16,0,Math.PI*2);g.fill();
+  g.fillStyle='rgba(255,255,255,0.35)';g.beginPath();g.arc(0,0,r*0.07,0,Math.PI*2);g.fill();
+  g.restore();
+}
+// crate stack with n boxes (bottom full width, each higher box slightly inset); dmg = kunai cracks
+function drawStackN(x,y,w,h,n,dmg){
+  var bh=h/n,i;
+  for(i=0;i<n;i++){var ins=0.04*i;drawCrate(x+w*ins,y+h-(i+1)*bh,w*(1-2*ins),bh)}
+  ctx.strokeStyle=rgb(pal.rope);ctx.lineWidth=Math.max(2,U*0.08);line(x+w*0.5,y,x+w*0.5,y+h);
+  if(dmg){ctx.strokeStyle='rgba(20,10,0,0.85)';ctx.lineWidth=Math.max(1.5,U*0.05);ctx.lineCap='round';
+    for(var k=0;k<Math.min(3,dmg);k++){var cx=x+w*(0.25+0.3*k),cy=y+bh*0.1;
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+w*0.1,cy+bh*0.25);ctx.lineTo(cx-w*0.05,cy+bh*0.45);ctx.lineTo(cx+w*0.08,cy+bh*0.7);ctx.stroke()}
+    ctx.lineCap='butt'}
+}
 function drawObs(o){
   var x=sx(o.x-dist),y=sy(o.y0+o.h),w=o.w*U,h=o.h*U;
   ctx.lineJoin='miter';ctx.lineCap='butt';
   if(o.dead)ctx.globalAlpha=0.3;
   if(o.type==='crate'){
     drawCrate(x,y,w,h);
+  }else if(o.type==='shur'){
+    var scx=x+w/2,scy=y+h/2,sr=U*0.4,fillS=rgb(pal.steel),olS=rgb(pal.outline);
+    // faint motion trail: streaks + fading ghost copies behind (it flies to the left)
+    var tg=ctx.createLinearGradient(scx,0,scx+U*2.2,0);tg.addColorStop(0,rgb(pal.objHalo[3]>0.02?pal.objHalo:pal.steel,0.55));tg.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.strokeStyle=tg;ctx.lineCap='round';ctx.lineWidth=Math.max(1.5,U*0.06);
+    line(scx+sr*0.3,scy-sr*0.55,scx+U*2.0,scy-sr*0.55);line(scx+sr*0.5,scy,scx+U*2.4,scy);line(scx+sr*0.3,scy+sr*0.55,scx+U*1.8,scy+sr*0.55);ctx.lineCap='butt';
+    for(var gk=3;gk>=1;gk--){ctx.globalAlpha=(o.dead?0.3:1)*0.16*(4-gk)/3;drawShuriken(ctx,scx+gk*U*0.38,scy,sr,o.rot+gk*0.45,fillS,olS)}
+    ctx.globalAlpha=o.dead?0.3:1;
+    if(pal.objHalo[3]>0.02){ctx.fillStyle=rgb(pal.objHalo);ctx.beginPath();ctx.arc(scx,scy,sr*1.08,0,Math.PI*2);ctx.fill()}
+    drawShuriken(ctx,scx,scy,sr,o.rot,fillS,olS,'rgba(255,255,255,0.6)');
+  }else if(o.type==='stack3'||(o.type==='stack'&&(o.boxes!==2||o.dmg))){
+    drawStackN(x,y,w,h,o.boxes,o.dmg);
   }else if(o.type==='stack'){
     drawCrate(x,y+h/2,w,h/2);                 // bottom crate
     drawCrate(x+w*0.04,y,w*0.92,h/2);         // top crate, slightly inset
@@ -645,6 +776,57 @@ function drawObs(o){
     ctx.fillStyle=rgb(pal.rope);ctx.fillRect(x+w*0.12,y-1,w*0.06,h+2);ctx.fillRect(x+w*0.82,y-1,w*0.06,h+2);
   }
   ctx.globalAlpha=1;
+}
+// weapon art pointing right, centred at (cx,cy), length ~ s
+function drawWeapon(g,wk,cx,cy,s,rot){
+  g.save();g.translate(cx,cy);g.rotate(rot||0);g.lineJoin='round';g.lineCap='round';
+  var ol='#14141a',lw=Math.max(1.2,s*0.045);g.lineWidth=lw;g.strokeStyle=ol;
+  if(wk==='kunai'){
+    g.fillStyle='#c9d2dc';g.beginPath();g.moveTo(s*0.5,0);g.lineTo(-s*0.02,-s*0.11);g.lineTo(-s*0.1,0);g.lineTo(-s*0.02,s*0.11);g.closePath();g.fill();g.stroke();
+    g.strokeStyle='rgba(255,255,255,0.8)';g.beginPath();g.moveTo(s*0.4,0);g.lineTo(0,-s*0.04);g.stroke();
+    g.fillStyle='#3a2a20';g.strokeStyle=ol;g.fillRect(-s*0.4,-s*0.04,s*0.3,s*0.08);g.strokeRect(-s*0.4,-s*0.04,s*0.3,s*0.08);
+    g.strokeStyle='#c0182a';g.lineWidth=lw*1.2;for(var i=0;i<3;i++){var hx2=-s*0.36+i*s*0.09;g.beginPath();g.moveTo(hx2,-s*0.04);g.lineTo(hx2+s*0.05,s*0.04);g.stroke()}
+    g.strokeStyle=ol;g.lineWidth=lw*1.4;g.beginPath();g.arc(-s*0.47,0,s*0.07,0,Math.PI*2);g.stroke();
+  }else if(wk==='katana'){
+    g.fillStyle='#dfe6ee';g.beginPath();g.moveTo(-s*0.12,-s*0.035);g.quadraticCurveTo(s*0.25,-s*0.1,s*0.6,-s*0.12);g.lineTo(s*0.5,-s*0.04);g.quadraticCurveTo(s*0.2,s*0.01,-s*0.12,s*0.035);g.closePath();g.fill();g.stroke();
+    g.strokeStyle='rgba(120,140,160,0.9)';g.lineWidth=lw*0.7;g.beginPath();g.moveTo(-s*0.08,-s*0.005);g.quadraticCurveTo(s*0.22,-s*0.05,s*0.52,-s*0.085);g.stroke();
+    g.fillStyle='#c9a227';g.strokeStyle=ol;g.lineWidth=lw;g.beginPath();g.ellipse(-s*0.14,0,s*0.035,s*0.1,0,0,Math.PI*2);g.fill();g.stroke();
+    g.fillStyle='#1d1d2a';g.fillRect(-s*0.48,-s*0.04,s*0.32,s*0.08);g.strokeRect(-s*0.48,-s*0.04,s*0.32,s*0.08);
+    g.strokeStyle='#e0242f';g.lineWidth=lw;for(var k=0;k<4;k++){var kx2=-s*0.45+k*s*0.075;g.beginPath();g.moveTo(kx2,-s*0.04);g.lineTo(kx2+s*0.04,s*0.04);g.moveTo(kx2+s*0.04,-s*0.04);g.lineTo(kx2,s*0.04);g.stroke()}
+  }else{ // axe
+    g.fillStyle='#7a4f22';g.fillRect(-s*0.45,-s*0.04,s*0.85,s*0.08);g.strokeRect(-s*0.45,-s*0.04,s*0.85,s*0.08);
+    g.fillStyle='#b8c2cc';g.beginPath();g.moveTo(s*0.18,-s*0.06);g.quadraticCurveTo(s*0.3,-s*0.12,s*0.36,-s*0.32);g.quadraticCurveTo(s*0.56,-s*0.05,s*0.36,s*0.3);g.quadraticCurveTo(s*0.3,s*0.1,s*0.18,s*0.06);g.closePath();g.fill();g.stroke();
+    g.strokeStyle='rgba(255,255,255,0.85)';g.lineWidth=lw*0.9;g.beginPath();g.moveTo(s*0.39,-s*0.24);g.quadraticCurveTo(s*0.5,-s*0.02,s*0.39,s*0.22);g.stroke();
+    g.fillStyle='#e0242f';g.fillRect(-s*0.45,-s*0.045,s*0.1,s*0.09);
+  }
+  g.restore();
+}
+function drawAttacks(){
+  var i;
+  for(i=0;i<shots.length;i++){var q=shots[i],X=sx(q.x),Y=sy(q.y);
+    var sg=ctx.createLinearGradient(X-U*1.6,0,X,0);sg.addColorStop(0,'rgba(255,255,255,0)');sg.addColorStop(1,'rgba(255,255,255,0.55)');
+    ctx.strokeStyle=sg;ctx.lineWidth=Math.max(1.5,U*0.06);ctx.lineCap='round';line(X-U*1.6,Y,X-U*0.3,Y);
+    if(q.k==='axe')drawWeapon(ctx,'axe',X,Y,U*1.1,q.rot);else drawWeapon(ctx,'kunai',X,Y,U*1.0,0)}
+  if(slash){var f=1-slash.t/slash.d,cx=sx(p.x+0.15),cy=sy(p.y+(p.slide>0&&p.onGround?0.6:1.3)),R=U*slash.reach*0.85;
+    var a0=-1.35+f*0.5,a1=-1.35+f*2.7;
+    ctx.save();ctx.globalAlpha=Math.min(1,(1-f)*1.6);
+    ctx.fillStyle='rgba(255,255,255,0.85)';ctx.beginPath();ctx.arc(cx,cy,R,a0,a1);ctx.arc(cx+U*0.25,cy,R*0.78,a1,a0,true);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(160,210,255,0.9)';ctx.lineWidth=Math.max(1.5,U*0.05);ctx.beginPath();ctx.arc(cx,cy,R,a0,a1);ctx.stroke();
+    ctx.restore();
+    drawWeapon(ctx,'katana',cx+Math.cos(a1)*U*0.8,cy+Math.sin(a1)*U*0.8,U*1.3,a1)}
+  for(i=0;i<pops.length;i++){var pp=pops[i];ctx.globalAlpha=Math.min(1,pp.l*2);txt('+'+KILL_BONUS,sx(pp.x),sy(pp.y),Math.max(12,U*0.42),rgb(pal.acc));ctx.globalAlpha=1}
+}
+// edge warning for a flying shuriken / three-box stack that is still off-screen to the right
+function drawWarnings(){
+  for(var i=0;i<obs.length;i++){var o=obs[i];if(o.dead||(o.type!=='shur'&&o.type!=='stack3'))continue;
+    var X=sx(o.x-dist);if(X<=W)continue;
+    var r=Math.max(10,U*0.34),cx=W-r*1.5,cy=o.type==='shur'?sy(o.y0+o.h/2):sy(2.0),pul=0.75+0.25*Math.sin(clk*18);
+    ctx.globalAlpha=pul;ctx.fillStyle='#d8201a';ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(1.5,r*0.14);
+    ctx.beginPath();ctx.moveTo(cx-r*1.35,cy);ctx.lineTo(cx-r*0.55,cy-r*0.8);ctx.lineTo(cx-r*0.55,cy+r*0.8);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    if(o.type==='stack3'){ctx.fillStyle='#fff';var bw=r*0.5,bh2=r*0.42;for(var k=0;k<3;k++)ctx.fillRect(cx-bw/2,cy+r*0.62-(k+1)*bh2*1.1,bw,bh2)}
+    else{ctx.fillStyle='#fff';ctx.font='900 '+Math.round(r*1.4)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('!',cx,cy+r*0.05)}
+    ctx.globalAlpha=1}
 }
 function txt(s,x,y,size,col,align){
   ctx.font='700 '+size+'px system-ui,-apple-system,Segoe UI,Roboto,sans-serif';ctx.textAlign=align||'center';ctx.textBaseline='middle';
@@ -777,8 +959,10 @@ function draw(){
   drawBackground();
   for(var j=0;j<coins.length;j++){var c=coins[j];if(c.got)continue;drawCoin(ctx,sx(c.x-dist),sy(c.y),U*0.21,rgb(pal.coin),rgb(pal.outline))}
   for(var k=0;k<obs.length;k++)drawObs(obs[k]);
+  if(state==='play'||state==='over')drawWarnings();
   for(var tq=0;tq<trail.length;tq++){var tp=trail[tq];drawTP(ctx,tp.k,sx(tp.x),sy(tp.y),U*tp.s,tp.l/tp.ml,tp.sd+clk*3)}
   drawPlayer();
+  drawAttacks();
   for(var q=0;q<particles.length;q++){var pp=particles[q];ctx.globalAlpha=Math.max(0,pp.l);ctx.fillStyle=pp.c;ctx.fillRect(sx(pp.x),sy(pp.y),U*0.1,U*0.1)}
   ctx.globalAlpha=1;
   drawWeather();
@@ -796,7 +980,9 @@ function draw(){
     txt('\u2191 / swipe up: jump  (again in mid-air = double jump)',W/2,H*0.33,fs*0.7,rgb(pal.sub));
     txt('\u2193 / swipe down: slide',W/2,H*0.33+fs*1.2,fs*0.7,rgb(pal.sub));
     var info=[];if(hs)info.push('Best '+hs);var bl=boostList();if(bl)info.push('Next run: '+bl);
-    if(info.length)txt(info.join('   \u2022   '),W/2,H*0.33+fs*2.6,fs*0.7,rgb(pal.acc));
+    var wq=weapon();
+    if(wq)txt((TOUCH?'Attack button':'\u2192')+': '+wq.name+' attack',W/2,H*0.33+fs*2.4,fs*0.7,rgb(pal.sub));
+    if(info.length)txt(info.join('   \u2022   '),W/2,H*0.33+fs*(wq?3.8:2.6),fs*0.7,rgb(pal.acc));
   }else if(state==='over'){
     ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,0,W,H); // game-over text lives in the DOM panel
   }else if(state==='shop'){ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(0,0,W,H)}
@@ -813,9 +999,13 @@ function syncUI(){
   ui.overBar.classList.toggle('hidden',state!=='over');
   ui.shop.classList.toggle('hidden',state!=='shop');
   ui.chip.textContent='\u2605 '+save.points+' pts';
+  syncAtk();
   $('bReward').classList.toggle('hidden',!(state==='over'&&run&&run.earned>0&&!run.rewarded));
   if(state==='over'){$('oScore').textContent=lastScore;$('oBest').textContent=hs;$('oNew').classList.toggle('hidden',!(run&&run.newBest))}
 }
+var atkBtn=$('bAtk'),atkWk='';
+function syncAtk(){var w=weapon(),show=state==='play'&&TOUCH&&!!w;atkBtn.classList.toggle('hidden',!show);
+  if(w&&w.wk!==atkWk){atkWk=w.wk;var c=$('atkIc'),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);drawWeapon(g,w.wk,c.width/2,c.height/2,c.width*0.9,-0.6)}}
 function toast(msg,bad){ui.toast.textContent=msg;ui.toast.className='on'+(bad?' bad':'');clearTimeout(toastTimer);toastTimer=setTimeout(function(){ui.toast.className=bad?'bad':''},2400)}
 function shake(el){if(!el)return;el.classList.remove('shake');void el.offsetWidth;el.classList.add('shake')}
 function sizePreview(){var r=ui.pv.getBoundingClientRect();pvW=Math.max(100,r.width||300);pvH=Math.max(60,r.height||110);ui.pv.width=Math.round(pvW*DPR);ui.pv.height=Math.round(pvH*DPR);pvx.setTransform(DPR,0,0,DPR,0,0)}
@@ -825,6 +1015,7 @@ function drawPreview(){
   g.fillStyle='#3a2f2a';g.fillRect(0,gy,w,h-gy);g.strokeStyle='#8a7a6a';g.lineWidth=2;g.beginPath();g.moveTo(0,gy);g.lineTo(w,gy);g.stroke();
   drawTrailSample(g,ITEM[save.equip.trail].kind,nx-u*0.35,gy-u*1.1,u,clk);
   drawNinja(g,nx,gy,u,{k:'run',ph:clk*10,tt:clk},curCos({halo:'rgba(255,255,255,0.55)'}));
+  var wpv=weapon();if(wpv)drawWeapon(g,wpv.wk,nx+u*1.15,gy-u*1.2,u*1.0,-0.5);
   var bx=w-14,keys2=['head','magnet','shield'];g.font='800 13px system-ui,sans-serif';g.textAlign='right';g.textBaseline='middle';
   for(var i=0;i<3;i++){var n=save.boosts[keys2[i]];if(!n)continue;g.fillStyle='#fff';g.fillText('x'+n,bx,22);drawBoostIcon(g,keys2[i],bx-28,22,10);bx-=62}
 }
@@ -833,6 +1024,7 @@ function drawIcon(c,it){
   if(it.cat==='outfit')drawNinja(g,s*0.5,s*0.95,s*0.4,{k:'run',ph:0.6,tt:1},curCos({outfit:it.id,halo:'rgba(255,255,255,0.5)'}));
   else if(it.cat==='band')drawNinja(g,s*0.32,s*1.95,s*0.95,{k:'run',ph:1.57,tt:0.8},curCos({band:it.id,halo:'rgba(255,255,255,0.5)'}));
   else if(it.cat==='trail'){if(it.kind){drawTrailSample(g,it.kind,s*0.75,s*0.5,s*0.3,0.4)}else{g.strokeStyle='#666';g.lineWidth=s*0.06;g.beginPath();g.arc(s/2,s/2,s*0.25,0,6.283);g.moveTo(s*0.32,s*0.68);g.lineTo(s*0.68,s*0.32);g.stroke()}}
+  else if(it.cat==='weapon')drawWeapon(g,it.wk,s*0.5,s*0.5,s*0.9,-0.6);
   else drawBoostIcon(g,it.key,s/2,s/2,s*0.3);
 }
 function buildShop(){
@@ -966,11 +1158,12 @@ function loop(now){
   update(dt);draw();
   if(state==='shop')drawPreview();
   if(uiState!==state)syncUI();
+  if(state==='play'&&run){var cl=run.cd>0;if(cl!==atkBtn._cool){atkBtn._cool=cl;atkBtn.classList.toggle('cool',cl)}}
   requestAnimationFrame(loop);
 }
 
 // ---- input ----
-// Keyboard: Up = jump (press again in the air = double jump), Down = slide; Space/Enter only start/restart.
+// Keyboard: Up = jump (press again in the air = double jump), Down = slide, Right = weapon attack; Space/Enter only start/restart.
 // S opens the shop from the start / game-over screens; in the shop: arrows move, Enter buys/equips, Esc goes back.
 var keys={down:false};
 window.addEventListener('keydown',function(e){
@@ -981,6 +1174,7 @@ window.addEventListener('keydown',function(e){
   if((k==='Space'||k===' '||k==='Enter'||k==='NumpadEnter')&&ae&&ae.tagName==='BUTTON'&&state!=='play')return; // let a focused button handle it
   if(k==='ArrowUp'||k==='Up'){e.preventDefault();if(!e.repeat)jump()}
   else if(k==='ArrowDown'||k==='Down'){e.preventDefault();keys.down=true;if(!e.repeat)slide()}
+  else if(k==='ArrowRight'||k==='Right'){if(state==='play'){e.preventDefault();attack()}} // attack (needs an equipped weapon)
   else if(k==='Space'||k===' '||k==='Enter'||k==='NumpadEnter'){e.preventDefault();if(!e.repeat&&state!=='play')handleStartRestart()}
   else if((k==='Escape'||k==='Esc')&&state==='over'){e.preventDefault();goHome()}
   else if((k==='KeyS'||e.key==='s'||e.key==='S')&&!e.repeat&&(state==='start'||state==='over')){e.preventDefault();openShop(true)}
@@ -1003,6 +1197,10 @@ cv.addEventListener('touchend',function(e){e.preventDefault();if(!ts)return;var 
   ts=null},{passive:false});
 cv.addEventListener('touchcancel',function(){ts=null});
 cv.addEventListener('mousedown',function(){if(state!=='play')handleStartRestart()}); // desktop click: start/restart only
+// attack button: taps on the button only (swipes on the game area still jump / slide)
+atkBtn.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();attack()},{passive:false});
+atkBtn.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation()},{passive:false});
+atkBtn.addEventListener('mousedown',function(e){e.preventDefault();attack()});
 
 resize();
 reset();
@@ -1016,7 +1214,11 @@ var hook={get state(){return state},get score(){return score()},jump:jump,slide:
   get save(){return save},get run(){return run},get hs(){return hs},setKeyDown:function(v){keys.down=v},start:handleStartRestart,
   openShop:openShop,closeShop:closeShop,goHome:goHome,activate:activate,share:share,gameUrl:gameUrl,shareText:shareText,items:ITEMS,stages:STAGES,
   addPoints:function(n){save.points+=n;persist();if(state==='shop')refreshShop();syncUI()},die:function(){if(state==='play')die()},
-  setStage:function(i){dist=i*STAGE_PTS*2+run.headDist*0;coinCount=0}};
+  setStage:function(i){dist=i*STAGE_PTS*2+run.headDist*0;coinCount=0},
+  attack:attack,get weapon(){return weapon()},weapons:WEAPONS,get shots(){return shots},get slash(){return slash},
+  forceNext:function(ty){nextType=ty},forceAfter:function(ty){forceType=ty},
+  warp:function(sc,spd){dist=sc*2;spawnGap=dist+4;obs.length=0;coins.length=0;if(spd)t=Math.max(0,(spd-BASE_SPEED)/0.12)},
+  consts:{GRAV:GRAV,JUMP_V:JUMP_V,BOX3_H:BOX3_H,SHUR_EXTRA:SHUR_EXTRA,MIN_VIEW:MIN_VIEW,STACK3_PTS:STACK3_PTS,SHUR_PTS:SHUR_PTS}};
 window.__ninjaRunner=hook;window.__stickRunner=hook;
 })();
 </script>
