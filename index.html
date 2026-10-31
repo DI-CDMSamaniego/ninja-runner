@@ -197,7 +197,7 @@ var AdService=(function(){
 (function(){
 'use strict';
 var cv=document.getElementById('c'),ctx=cv.getContext('2d');
-var W=0,H=0,DPR=1,U=1,GROUND=0,MIN_VIEW=16,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
+var W=0,H=0,DPR=1,U=1,GROUND=0,MOBILE=false,MIN_VIEW=12.25,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
 var HS_KEY='ninjaRunnerHighScore',OLD_HS_KEY='stickRunnerHighScore';
 function loadHS(){try{return parseInt(localStorage.getItem(HS_KEY)||localStorage.getItem(OLD_HS_KEY)||'0',10)||0}catch(e){return 0}}
 function saveHS(v){try{localStorage.setItem(HS_KEY,String(v))}catch(e){}}
@@ -214,15 +214,19 @@ function resize(){
   cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
   U=Math.min(H/12,W/8);          // world unit scales with screen
-  // [view-fix-v8] narrow/portrait screens (W/H<1.6 and fewer than MIN_VIEW units across): zoom out only to
-  // MIN_VIEW=16 units (v7 used 24 -> ninja too small; original 8 -> too zoomed in). To keep reaction time,
-  // the player is moved left so >= REACT_SEC seconds of track at start speed are visible ahead
-  // (PX clamped 1.4..2.5). Portrait (W<H) also raises the ground line (0.78H -> 0.70H) for less empty sky.
-  // Desktop / landscape (W/H>=1.6) unchanged: PX=2.5, GROUND=0.78H.
-  PX=2.5;var narrow=W/H<1.6&&W/U<MIN_VIEW;
-  if(narrow){U=W/MIN_VIEW;PX=Math.max(1.4,Math.min(2.5,W/U-REACT_SEC*START_SPD))}
-  else if(W/H<1.6&&W/U<24)PX=Math.max(1.4,Math.min(2.5,W/U-REACT_SEC*START_SPD));
-  GROUND=H*(W<H?0.70:0.78);
+  // [view-fix-v9] mobile view adjustments apply ONLY on real touch phones in portrait (touch input AND W<H
+  // AND W<=500 CSS px). Every other device/window (desktop of any size/aspect) uses the original rules:
+  // U=min(H/12,W/8), PX=2.5, GROUND=0.78H.
+  // On phones: zoom out to MIN_VIEW=12.25 units (v8 used 16; ninja ~70px tall at 390 wide), player moved
+  // left (PX = W/U-REACT_SEC*START_SPD clamped 1.4..2.5 -> 1.4 at 12.25 units, max look-ahead), ground 0.70H.
+  PX=2.5;GROUND=H*0.78;
+  var touch=false;try{touch=(window.matchMedia&&matchMedia('(pointer: coarse)').matches)||('ontouchstart' in window)||(navigator.maxTouchPoints>0)}catch(e){}
+  MOBILE=touch&&W<H&&W<=500;
+  if(MOBILE){
+    if(W/U<MIN_VIEW)U=W/MIN_VIEW;
+    if(W/U<24)PX=Math.max(1.4,Math.min(2.5,W/U-REACT_SEC*START_SPD));
+    GROUND=H*0.70;
+  }
   if(p)p.x=PX;
   if(typeof sizePreview==='function'&&state==='shop')sizePreview();
 }
@@ -400,9 +404,9 @@ function spawn(){
   var minSec=0.95;
   if(type==='stack')minSec=1.75;          // land from double jump, then react
   if(nextType==='stack')minSec=Math.max(minSec,1.5); // land previous + early take-off for stack
-  // [view-fix-v8] reduced view (narrow screens): the obstacle before a stack must be past the player
+  // [view-fix-v9] reduced view (touch phones in portrait only): the obstacle before a stack must be past the player
   // before the stack scrolls into view, so the whole visible look-ahead is free for the stack
-  if(nextType==='stack'&&W/U<20)minSec=Math.max(minSec,(W/U-PX+o.w+1.5)/speed);
+  if(MOBILE&&nextType==='stack'&&W/U<20)minSec=Math.max(minSec,(W/U-PX+o.w+1.5)/speed);
   var extra=Math.random()*(type==='stack'||nextType==='stack'?0.8:1.1);
   spawnGap=x+speed*(minSec+extra)+o.w-(W/U+2);
 }
@@ -1008,7 +1012,7 @@ requestAnimationFrame(loop);
 
 // test hook
 var hook={get state(){return state},get score(){return score()},jump:jump,slide:slide,showAd:showAd,watchReward:watchReward,ads:AdService,
-  get view(){return {W:W,H:H,U:U,GROUND:GROUND,units:W/U}},get player(){return p},get obstacles(){return obs},get coins(){return coins},get dist(){return dist},get speed(){return speed},get stage(){return STAGES[stageIdx].name},
+  get view(){return {W:W,H:H,U:U,GROUND:GROUND,units:W/U,mobile:MOBILE}},get player(){return p},get obstacles(){return obs},get coins(){return coins},get dist(){return dist},get speed(){return speed},get stage(){return STAGES[stageIdx].name},
   get save(){return save},get run(){return run},get hs(){return hs},setKeyDown:function(v){keys.down=v},start:handleStartRestart,
   openShop:openShop,closeShop:closeShop,goHome:goHome,activate:activate,share:share,gameUrl:gameUrl,shareText:shareText,items:ITEMS,stages:STAGES,
   addPoints:function(n){save.points+=n;persist();if(state==='shop')refreshShop();syncUI()},die:function(){if(state==='play')die()},
