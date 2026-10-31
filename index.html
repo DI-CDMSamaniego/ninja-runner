@@ -89,6 +89,29 @@ canvas#c{display:block;position:fixed;left:0;top:0;width:100vw;height:calc(100% 
 .adScreen .adX{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;min-height:40px;padding:6px 14px;font-size:14px}
 .adProg{width:min(520px,88vw);height:10px;border-radius:99px;background:#2a2a36;overflow:hidden}
 .adProg i{display:block;height:100%;width:0;background:#ffd23f}
+/* ===== GCASH PRIZES ===== */
+.pline{display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,.5);border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:700;color:#e8e8f0;white-space:nowrap}
+.pline b{color:#ffd23f}
+.lnk{pointer-events:auto;background:none;border:0;padding:2px 0;color:#9fd0ff;font:700 12.5px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-decoration:underline;cursor:pointer;touch-action:manipulation}
+.lnk.gold{color:#ffd23f}
+.claim{background:#007dfe;border-color:#cfe6ff;font-size:17px}
+.pnext{margin-top:8px;font-size:13px;font-weight:600;color:#9a9aab}
+#pToast{position:absolute;left:50%;top:60px;transform:translateX(-50%);background:rgba(20,16,0,.9);border:2px solid #ffc400;color:#ffe27a;padding:8px 14px;border-radius:12px;font-weight:800;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:86vw;text-align:center;z-index:4}
+#pToast.on{opacity:1}
+.pmBack{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;background:rgba(0,0,0,.62);pointer-events:auto;touch-action:manipulation}
+.pm{position:relative;width:min(360px,92vw);max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;background:#16161f;border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:18px 18px 16px;text-align:left;box-shadow:0 10px 30px rgba(0,0,0,.5);touch-action:pan-y}
+.pm h3{margin:0 0 10px;font-size:18px;font-weight:800;color:#ffd23f;padding-right:30px}
+.pm p,.pm li{font-size:14px;line-height:1.4;color:#d8d8e2;margin:0 0 8px}
+.pm ul{margin:0 0 6px;padding-left:20px}
+.pm label{display:block;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#9a9aab;margin:10px 0 4px}
+.pm input{width:100%;box-sizing:border-box;min-height:44px;padding:8px 12px;border-radius:10px;border:2px solid #3a3a48;background:#0f0f16;color:#fff;font:600 16px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:text;user-select:text;touch-action:manipulation}
+.pm input:focus{outline:none;border-color:#ffd23f}
+.pm input.bad{border-color:#ff5a4f}
+.pm .err{min-height:18px;font-size:13px;font-weight:700;color:#ff8a80;margin-top:6px}
+.pm .hint{font-size:12px;color:#9a9aab;margin-top:4px}
+.pm .pbtns{margin-top:12px}
+.pm .x{position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;border:0;background:rgba(255,255,255,.1);color:#fff;font:700 18px/1 system-ui,sans-serif;cursor:pointer;pointer-events:auto}
+.pm .ok{color:#8fe39a;font-weight:800}
 
 </style>
 </head>
@@ -99,13 +122,15 @@ canvas#c{display:block;position:fixed;left:0;top:0;width:100vw;height:calc(100% 
     <div class="row"><button id="bPlay" class="btn primary bigPlay">Play</button></div>
     <div class="row"><button id="bShop1" class="btn gold sub">Shop <small>(S)</small></button><button id="bInvite" class="btn fb2 sub">Invite friends</button></div>
     <div class="row"><span id="chip" class="chip sm">0 pts</span></div>
+    <div class="row"><span id="prizeLine" class="pline"><span id="prizeTxt">Next prize: <b>PHP 20</b> at 5,000</span><button id="bClaimHome" class="lnk gold hidden">Claim</button><button id="bRules" class="lnk">Prize rules</button></span></div>
   </div>
   <div id="overBar" class="hidden">
     <div class="panel">
       <h2>GAME OVER</h2>
       <div class="stats"><div class="stat"><div class="lb">Score</div><div id="oScore" class="vl">0</div></div><div class="stat"><div class="lb">Best</div><div id="oBest" class="vl">0</div></div></div>
       <div id="oNew" class="nb hidden">New best!</div>
-      <div class="pbtns"><div class="pduo"><button id="bAgain" class="btn primary">Play again</button><button id="bHome" class="btn home2" title="Home (Esc)">Home</button></div><button id="bReward" class="btn reward hidden">Watch ad: double points</button><button id="bFb" class="btn fb"><span class="fbf">f</span>Share</button></div>
+      <div id="oPrize" class="pnext hidden"></div>
+      <div class="pbtns"><button id="bClaim" class="btn claim hidden">Claim PHP 20 prize</button><div class="pduo"><button id="bAgain" class="btn primary">Play again</button><button id="bHome" class="btn home2" title="Home (Esc)">Home</button></div><button id="bReward" class="btn reward hidden">Watch ad: double points</button><button id="bFb" class="btn fb"><span class="fbf">f</span>Share</button></div>
     </div>
   </div>
   <div id="shop" class="hidden" role="dialog" aria-label="Shop">
@@ -117,6 +142,46 @@ canvas#c{display:block;position:fixed;left:0;top:0;width:100vw;height:calc(100% 
   </div>
   <button id="bAtk" class="hidden" aria-label="Attack"><canvas id="atkIc" width="124" height="124"></canvas></button>
   <div id="toast"></div>
+  <div id="pToast" role="status" aria-live="polite"></div>
+  <div id="rulesM" class="pmBack hidden" role="dialog" aria-modal="true" aria-label="Prize rules">
+    <div class="pm">
+      <button class="x" id="bRulesX" aria-label="Close">&#10005;</button>
+      <h3>Prize rules</h3>
+      <ul id="rulesTiers"></ul>
+      <ul>
+        <li>Free to play. No purchase needed.</li>
+        <li>Each prize tier can be won once per player.</li>
+        <li>Scores are verified before paying.</li>
+        <li>Prizes are sent by GCash.</li>
+        <li>The organizer's decision is final.</li>
+        <li>The promo can end or change at any time.</li>
+      </ul>
+      <div class="pbtns"><button id="bRulesOk" class="btn primary">OK</button></div>
+    </div>
+  </div>
+  <div id="claimM" class="pmBack hidden" role="dialog" aria-modal="true" aria-label="Claim prize">
+    <div class="pm">
+      <button class="x" id="bClaimX" aria-label="Close">&#10005;</button>
+      <h3 id="claimTitle">Claim PHP 20 prize</h3>
+      <form id="claimF" novalidate>
+        <div id="claimForm">
+          <p>Enter your details. Your email app opens with a message to the organizer, and you press send. Nothing is sent automatically.</p>
+          <label for="cName">Your name</label>
+          <input id="cName" type="text" autocomplete="name" maxlength="60" placeholder="Juan Dela Cruz">
+          <label for="cNum">GCash number</label>
+          <input id="cNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="16" placeholder="09XXXXXXXXX">
+          <div class="hint">11 digits, starts with 09</div>
+          <div id="cErr" class="err" role="alert"></div>
+          <div class="pbtns"><button id="bSend" type="submit" class="btn claim">Send claim by email</button><button id="bCopyC" type="button" class="btn ghost">Copy message</button></div>
+        </div>
+        <div id="claimDone" class="hidden">
+          <p class="ok">Claim saved on this device.</p>
+          <p id="claimDoneTxt">If your email app did not open, copy the message and send it to the organizer.</p>
+          <div class="pbtns"><button id="bCopyD" type="button" class="btn ghost">Copy message</button><button id="bDone" type="button" class="btn primary">Done</button></div>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 <div id="adBanner" role="complementary" aria-label="Advertisement"><span class="adTag">Ad</span><span>Ad placeholder &middot; banner 320&times;50</span></div>
 <script>
@@ -129,6 +194,21 @@ canvas#c{display:block;position:fixed;left:0;top:0;width:100vw;height:calc(100% 
    to copying the message (Copy link button).
    ===================================================================== */
 var GAME_URL = '';
+
+/* =====================================================================
+   GCASH PRIZES  -  EDIT HERE
+   score = best single-run score needed (score() = distance + coins*10 + kill bonus)
+   php   = prize in pesos. Each tier can be won once per player (per device for now).
+   ORGANIZER_EMAIL receives claims (via the player's own email app, mailto:).
+   No backend, no network calls: claims are only saved locally + sent by the player.
+   ===================================================================== */
+var PRIZE_TIERS = [
+  {score: 5000,  php: 20},
+  {score: 10000, php: 50},
+  {score: 20000, php: 100},
+  {score: 50000, php: 300}
+];
+var ORGANIZER_EMAIL = 'di.engineering.cds@outlook.com';
 
 /* =====================================================================
    AdService  -  ALL ADS GO THROUGH HERE (currently PLACEHOLDERS ONLY)
@@ -279,7 +359,11 @@ var ITEMS=[
 var ITEM={};ITEMS.forEach(function(it){ITEM[it.id]=it});
 var CATS=[['outfit','Ninja outfits',''],['band','Headbands',''],['trail','Trails',''],['weapon','Weapons','buy once, unlimited use: \u2192 key or the attack button'],['boost','Boosts','one-time, used at the start of your next run']];
 var SAVE_KEY='ninjaRunnerSave_v1';
-function defSave(){return {points:0,owned:{o_black:1,h_red:1,t_none:1},equip:{outfit:'o_black',band:'h_red',trail:'t_none',weapon:''},boosts:{shield:0,magnet:0,head:0},runs:0}}
+function defSave(){return {points:0,owned:{o_black:1,h_red:1,t_none:1},equip:{outfit:'o_black',band:'h_red',trail:'t_none',weapon:''},boosts:{shield:0,magnet:0,head:0},runs:0,prizes:{unlocked:{},claimed:{}},pid:''}}
+// prize tiers sorted by score; keys in save.prizes are the tier score as a string
+var TIERS=(PRIZE_TIERS||[]).filter(function(x){return x&&x.score>0&&x.php>0}).map(function(x){return {score:Math.floor(x.score),php:x.php}}).sort(function(a,b){return a.score-b.score});
+function tierOf(sc){for(var i=0;i<TIERS.length;i++)if(TIERS[i].score===+sc)return TIERS[i];return null}
+function newPid(){var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',s='';for(var i=0;i<8;i++)s+=c[Math.floor(Math.random()*c.length)];return s}
 function loadSave(){
   var d=defSave();
   try{var s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
@@ -288,7 +372,15 @@ function loadSave(){
       if(s.owned)for(var k in s.owned)if(ITEM[k]&&ITEM[k].cat!=='boost'&&s.owned[k])d.owned[k]=1;
       if(s.equip)for(var e in d.equip){var v=s.equip[e];if(ITEM[v]&&ITEM[v].cat===e&&d.owned[v])d.equip[e]=v}
       if(s.boosts)for(var b in d.boosts)d.boosts[b]=Math.max(0,Math.min(MAX_BOOST,s.boosts[b]|0));
+      // prizes (added in v13; older saves simply have none). Only known tiers are kept; claimed needs unlocked.
+      var pz=s.prizes;
+      if(pz&&typeof pz==='object'){
+        if(pz.unlocked&&typeof pz.unlocked==='object')for(var u in pz.unlocked){var uv=pz.unlocked[u];if(tierOf(u)&&uv)d.prizes.unlocked[String(+u)]={score:Math.max(+u,Math.floor(+(uv&&uv.score)||0)),at:+(uv&&uv.at)||0}}
+        if(pz.claimed&&typeof pz.claimed==='object')for(var c2 in pz.claimed){var cv2=pz.claimed[c2];if(tierOf(c2)&&cv2&&d.prizes.unlocked[String(+c2)])d.prizes.claimed[String(+c2)]={at:+(cv2&&cv2.at)||0}}
+      }
+      if(typeof s.pid==='string'&&/^[A-Z0-9]{6,12}$/.test(s.pid))d.pid=s.pid;
     }}catch(err){}
+  if(!d.pid)d.pid=newPid();
   return d;
 }
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(save))}catch(e){}}
@@ -370,7 +462,7 @@ function reset(){
   p={x:PX,y:0,vy:0,onGround:true,slide:0,phase:0,jumps:0,djT:9};
   obs=[];coins=[];particles=[];trail=[];trailAcc=0;shots=[];slash=null;pops=[];
   speed=BASE_SPEED;dist=0;coinCount=0;spawnGap=8;t=0;nextType=pickType(0);
-  run={shield:0,magnet:0,inv:0,headDist:0,earned:0,banner:0,bannerTxt:'',rewarded:false,bonus:0,kills:0,cd:0};
+  run={shield:0,magnet:0,inv:0,headDist:0,earned:0,banner:0,bannerTxt:'',rewarded:false,bonus:0,kills:0,cd:0,prizeNew:[],prizeFlash:0,prizeFlashTier:null};
   p.atkT=0;
 }
 // start a run: consumes one of each boost the player bought in the shop
@@ -401,7 +493,7 @@ function slide(){
   else{p.vy=Math.max(p.vy,14);p.slide=SLIDE_TIME} // fast-fall into slide
 }
 function handleStartRestart(){
-  if(AdService.isOpen())return;
+  if(AdService.isOpen()||modal)return;
   if(state==='start'){startRun()}
   else if(state==='over'&&performance.now()-deadT>500){startRun()}
 }
@@ -499,10 +591,30 @@ function update(dt){
     if(run.magnet&&!c.got&&cx-p.x<6&&cx-p.x>-1.5){var k=Math.min(1,dt*7);c.x+=(p.x+dist-c.x)*k;c.y+=(p.y+1.1-c.y)*k;cx=c.x-dist}
     if(!c.got&&Math.abs(cx-p.x)<0.6&&c.y>b.y0-0.3&&c.y<b.y1+0.3){c.got=true;coinCount++;burst(cx,c.y,rgb(pal.coin),6)}
   }
+  checkPrizes();if(run.prizeFlash>0)run.prizeFlash-=dt;
   updParticles(dt);updTrail(dt,true);
   for(var pq=pops.length-1;pq>=0;pq--){pops[pq].l-=dt;pops[pq].y+=dt*1.6;if(pops[pq].l<=0)pops.splice(pq,1)}
 }
 function score(){return Math.floor(dist/2)+coinCount*10+(run&&run.bonus||0)}
+
+/* ===== GCASH PRIZES (state in save.prizes, see PRIZE_TIERS at the top) ===== */
+function isUnlocked(t){return !!save.prizes.unlocked[String(t.score)]}
+function isClaimed(t){return !!save.prizes.claimed[String(t.score)]}
+function nextTier(){for(var i=0;i<TIERS.length;i++)if(!isUnlocked(TIERS[i]))return TIERS[i];return null} // current target
+function unclaimedTier(){ // prefer one unlocked in this run, else the lowest unlocked-but-unclaimed tier
+  var i,t;if(run&&run.prizeNew)for(i=0;i<run.prizeNew.length;i++){t=tierOf(run.prizeNew[i]);if(t&&!isClaimed(t))return t}
+  for(i=0;i<TIERS.length;i++){t=TIERS[i];if(isUnlocked(t)&&!isClaimed(t))return t}return null}
+function fmt(n){return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g,',')}
+// called every play frame: unlocks every tier whose threshold the current run score has reached
+function checkPrizes(){
+  if(state!=='play'||!run)return [];
+  var s=score(),got=[];
+  for(var i=0;i<TIERS.length;i++){var t=TIERS[i];
+    if(s>=t.score&&!isUnlocked(t)){save.prizes.unlocked[String(t.score)]={score:s,at:Date.now()};run.prizeNew.push(t.score);got.push(t)}}
+  if(got.length){persist();var top=got[got.length-1];run.prizeFlash=1.4;run.prizeFlashTier=top;
+    prizeToast('PHP '+top.php+' prize unlocked! Claim it after your run')}
+  return got;
+}
 
 /* ===== WEAPON ATTACKS ===== */
 function weapon(){var id=save.equip.weapon;return id&&ITEM[id]&&save.owned[id]?ITEM[id]:null}
@@ -541,6 +653,7 @@ function updWeapons(dt){
 }
 function pointsFor(){return coinCount*COIN_PTS+Math.floor(Math.max(0,Math.floor((dist-run.headDist)/2))/DIST_DIV)}
 function die(){
+  checkPrizes(); // a threshold crossed on the fatal frame still counts
   state='over';deadT=performance.now();
   var C=curCos();burst(p.x,p.y+1.2,C.body,14);burst(p.x,p.y+1.6,C.band,10);
   var s=score();lastScore=s;run.newBest=s>hs&&s>0;if(s>hs){hs=s;saveHS(hs)}
@@ -973,6 +1086,7 @@ function draw(){
     if(coinCount){drawCoin(ctx,fs*1.2,fs*1.3,fs*0.32,rgb(pal.coin),rgb(pal.outline));txt(String(coinCount),fs*1.75,fs*1.3,fs*0.8,rgb(pal.hud),'left')}
     if(state==='play'){var bi=0;if(run.shield)drawBoostIcon(ctx,'shield',fs*1.2+bi++*fs*1.1,fs*2.55,fs*0.38);if(run.magnet)drawBoostIcon(ctx,'magnet',fs*1.2+bi++*fs*1.1,fs*2.55,fs*0.38)}
   }
+  if(state==='play')drawPrizeBar(fs);
   if(labelT>0&&state==='play'){ctx.globalAlpha=Math.min(1,labelT)*0.7;txt(STAGES[stageIdx].name.toUpperCase(),W/2,fs*1.3,fs*0.6,rgb(pal.sub));ctx.globalAlpha=1}
   if(state==='play'&&run.banner>0){ctx.globalAlpha=Math.min(1,run.banner);txt(run.bannerTxt,W/2,H*0.22,fs*0.85,rgb(pal.acc));ctx.globalAlpha=1}
   if(state==='start'){
@@ -986,6 +1100,21 @@ function draw(){
   }else if(state==='over'){
     ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,0,W,H); // game-over text lives in the DOM panel
   }else if(state==='shop'){ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(0,0,W,H)}
+}
+// thin progress bar toward the next prize, centred under the stage label, between the coin and score HUDs
+function drawPrizeBar(fs){
+  if(!TIERS.length)return;
+  var nt=nextTier(),flash=run&&run.prizeFlash>0&&run.prizeFlashTier,cx=W/2,ls=Math.max(11,fs*0.45),ly=fs*2.15;
+  if(!nt&&!flash){ctx.globalAlpha=0.75;txt('All prizes unlocked',cx,ly,ls,rgb(pal.sub));ctx.globalAlpha=1;return}
+  var bw=Math.round(Math.min(320,W*0.5)),bh=Math.max(5,Math.round(fs*0.2)),bx=Math.round(cx-bw/2),by=Math.round(fs*2.15+ls*0.75),s=score(),f,lab;
+  if(flash){f=1;lab='PHP '+run.prizeFlashTier.php+' unlocked!'}
+  else{f=Math.max(0,Math.min(1,s/nt.score));lab=fmt(Math.min(s,nt.score))+' / '+fmt(nt.score)+'  \u2022  PHP '+nt.php}
+  txt(lab,cx,ly,ls,flash?rgb(pal.acc):rgb(pal.hud));
+  var r=bh/2;
+  function rr(x,y,w,h){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arc(x+w-r,y+r,r,-Math.PI/2,Math.PI/2);ctx.lineTo(x+r,y+h);ctx.arc(x+r,y+r,r,Math.PI/2,Math.PI*1.5);ctx.closePath()}
+  ctx.fillStyle='rgba(0,0,0,0.38)';rr(bx-1,by-1,bw+2,bh+2);ctx.fill();
+  if(f>0){var fw=Math.max(bh,bw*f);var g=ctx.createLinearGradient(bx,0,bx+bw,0);g.addColorStop(0,'#ffb300');g.addColorStop(1,'#ffe27a');ctx.fillStyle=g;rr(bx,by,fw,bh);ctx.fill()}
+  if(flash){ctx.globalAlpha=0.5+0.5*Math.sin(clk*14);ctx.strokeStyle='#fff3b0';ctx.lineWidth=1.5;rr(bx-1,by-1,bw+2,bh+2);ctx.stroke();ctx.globalAlpha=1}
 }
 function boostList(){var a=[];if(save.boosts.shield)a.push('Shield x'+save.boosts.shield);if(save.boosts.magnet)a.push('Magnet x'+save.boosts.magnet);if(save.boosts.head)a.push('Head Start x'+save.boosts.head);return a.join(', ')}
 
@@ -1002,7 +1131,82 @@ function syncUI(){
   syncAtk();
   $('bReward').classList.toggle('hidden',!(state==='over'&&run&&run.earned>0&&!run.rewarded));
   if(state==='over'){$('oScore').textContent=lastScore;$('oBest').textContent=hs;$('oNew').classList.toggle('hidden',!(run&&run.newBest))}
+  syncPrizeUI();
 }
+function syncPrizeUI(){
+  var uc=unclaimedTier(),nt=nextTier(),cb=$('bClaim'),op=$('oPrize'),pt=$('prizeTxt'),ch=$('bClaimHome');
+  // game over: one Claim button (prize unlocked and not claimed yet), otherwise one muted "N to next prize" line
+  var showClaim=state==='over'&&!!uc;
+  cb.classList.toggle('hidden',!showClaim);if(uc)cb.textContent='Claim PHP '+uc.php+' prize';
+  var showNext=state==='over'&&!showClaim&&!!nt;
+  op.classList.toggle('hidden',!showNext);if(nt)op.textContent=fmt(Math.max(1,nt.score-lastScore))+' to next prize (PHP '+nt.php+')';
+  // home: next prize line (+ small Claim link if a prize is waiting)
+  pt.textContent='';
+  if(nt){pt.appendChild(document.createTextNode('Next prize: '));var b=document.createElement('b');b.textContent='PHP '+nt.php;pt.appendChild(b);pt.appendChild(document.createTextNode(' at '+fmt(nt.score)))}
+  else pt.textContent=TIERS.length?'All prizes unlocked':'';
+  ch.classList.toggle('hidden',!uc);if(uc)ch.textContent='Claim PHP '+uc.php;
+  if(state!=='play'&&pToastEl.className){clearTimeout(pToastTimer);pToastEl.className=''} // the unlock toast is only for the run
+}
+var pToastEl=$('pToast'),pToastTimer=0;
+function prizeToast(msg){var fs=Math.max(14,Math.min(W,H)*0.045);pToastEl.style.top=Math.round(fs*2.15+Math.max(11,fs*0.45)*0.75+Math.max(5,fs*0.2)+10)+'px';
+  pToastEl.textContent=msg;pToastEl.className='on';clearTimeout(pToastTimer);pToastTimer=setTimeout(function(){pToastEl.className=''},3200)}
+/* ---- prize rules + claim (mailto / copy; nothing is sent automatically) ---- */
+var modal=null,claimT=null,lastMail='';
+function modalOpen(){return !!modal}
+function openModal(el){closeModal();modal=el;el.classList.remove('hidden')}
+function closeModal(){if(!modal)return;modal.classList.add('hidden');modal=null;if(document.activeElement&&document.activeElement.blur)document.activeElement.blur()}
+function openRules(){
+  var ul=$('rulesTiers');ul.textContent='';
+  TIERS.forEach(function(t){var li=document.createElement('li');li.textContent='Score '+fmt(t.score)+' in one run: PHP '+t.php+' GCash';ul.appendChild(li)});
+  openModal($('rulesM'));$('bRulesOk').focus();
+}
+function normGcash(v){var s=String(v||'').replace(/[\s\-().]/g,'');if(/^\+?639\d{9}$/.test(s))s='0'+s.replace(/^\+?63/,'');return /^09\d{9}$/.test(s)?s:null}
+function claimMessage(t,name,num){
+  var u=save.prizes.unlocked[String(t.score)]||{};
+  return ['Ninja Runner prize claim - PHP '+t.php,'',
+    'Name: '+name,'GCash number: '+num,'Prize tier: PHP '+t.php+' (score '+fmt(t.score)+')',
+    'Best score: '+fmt(hs),'Score that unlocked it: '+fmt(u.score||t.score)+(u.at?' ('+ymd(u.at)+')':''),
+    'Player ID: '+save.pid,'Page: '+(gameUrl()||'local file'),'',
+    'I understand the organizer will verify my score before sending the prize by GCash.'].join('\r\n');
+}
+function ymd(ms){var d=new Date(ms),z=function(n){return (n<10?'0':'')+n};return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())}
+function claimSubject(t){return 'Ninja Runner prize claim - PHP '+t.php}
+function mailtoUrl(t,name,num){return 'mailto:'+ORGANIZER_EMAIL+'?subject='+encodeURIComponent(claimSubject(t))+'&body='+encodeURIComponent(claimMessage(t,name,num))}
+var mailOpener=function(url){var a=document.createElement('a');a.href=url;a.style.display='none';document.body.appendChild(a);a.click();document.body.removeChild(a)};
+function openClaim(){
+  var t=unclaimedTier();if(!t)return false;claimT=t;
+  $('claimTitle').textContent='Claim PHP '+t.php+' prize';
+  $('claimForm').classList.remove('hidden');$('claimDone').classList.add('hidden');$('cErr').textContent='';
+  $('cName').classList.remove('bad');$('cNum').classList.remove('bad');
+  openModal($('claimM'));if(!TOUCH)$('cName').focus();
+  return true;
+}
+// validates the form; returns {name,num} or null (and shows the error)
+function claimValues(){
+  var nm=$('cName').value.replace(/\s+/g,' ').trim(),num=normGcash($('cNum').value),err='';
+  $('cName').classList.toggle('bad',nm.length<2);$('cNum').classList.toggle('bad',!num);
+  if(nm.length<2)err='Please enter your name.';else if(!num)err='Enter a valid GCash number: 11 digits starting with 09 (09XXXXXXXXX).';
+  $('cErr').textContent=err;
+  return err?null:{name:nm,num:num};
+}
+function markClaimed(t){if(!isClaimed(t)){save.prizes.claimed[String(t.score)]={at:Date.now()};persist()}}
+function claimDone(t){markClaimed(t);$('claimForm').classList.add('hidden');$('claimDone').classList.remove('hidden');syncPrizeUI();$('bDone').focus()}
+function submitClaim(how){
+  var t=claimT;if(!t)return false;var v=claimValues();if(!v)return false;
+  lastMail=mailtoUrl(t,v.name,v.num);
+  if(how==='copy'){copyText(claimMessage(t,v.name,v.num),function(ok){toast(ok?'Message copied - send it to '+ORGANIZER_EMAIL:'Could not copy on this device',!ok)})}
+  else{try{mailOpener(lastMail)}catch(e){}}
+  claimDone(t);return true;
+}
+$('claimF').addEventListener('submit',function(e){e.preventDefault();submitClaim('mail')});
+$('bCopyC').addEventListener('click',function(){submitClaim('copy')});
+$('bCopyD').addEventListener('click',function(){var v=claimValues();if(v&&claimT)copyText(claimMessage(claimT,v.name,v.num),function(ok){toast(ok?'Message copied - send it to '+ORGANIZER_EMAIL:'Could not copy on this device',!ok)})});
+$('bDone').addEventListener('click',function(){closeModal();syncUI()});
+$('bClaimX').addEventListener('click',function(){closeModal();syncUI()});
+$('bRulesX').addEventListener('click',closeModal);$('bRulesOk').addEventListener('click',closeModal);
+['rulesM','claimM'].forEach(function(id){var m=$(id);
+  m.addEventListener('click',function(e){if(e.target===m){closeModal();syncUI()}});
+  ['touchstart','touchmove','touchend','mousedown'].forEach(function(ev){m.addEventListener(ev,function(e){e.stopPropagation()})})});
 var atkBtn=$('bAtk'),atkWk='';
 function syncAtk(){var w=weapon(),show=state==='play'&&TOUCH&&!!w;atkBtn.classList.toggle('hidden',!show);
   if(w&&w.wk!==atkWk){atkWk=w.wk;var c=$('atkIc'),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);drawWeapon(g,w.wk,c.width/2,c.height/2,c.width*0.9,-0.6)}}
@@ -1074,7 +1278,7 @@ function activate(id,el){
   save.points-=it.price;save.owned[id]=1;save.equip[it.cat]=id;persist();refreshShop();toast('Bought and equipped '+it.name+'!');return true;
 }
 function openShop(byKey){
-  if(state!=='start'&&state!=='over')return;
+  if((state!=='start'&&state!=='over')||modal)return;
   shopFrom=state;state='shop';buildShop();refreshShop();syncUI();sizePreview();
   if(byKey&&cards[0])cards[0].el.focus();
 }
@@ -1152,6 +1356,7 @@ function watchReward(){
   },function(){syncUI()});
 }
 btn('bReward',watchReward);
+btn('bClaim',openClaim);btn('bClaimHome',openClaim);btn('bRules',openRules);
 
 function loop(now){
   var dt=Math.min(0.05,(now-(lastT||now))/1000);lastT=now;
@@ -1169,6 +1374,7 @@ var keys={down:false};
 window.addEventListener('keydown',function(e){
   var k=e.code||e.key;
   if(AdService.isOpen())return; // full-screen ad: let its buttons handle keys
+  if(modal){if(k==='Escape'||k==='Esc'){e.preventDefault();closeModal();syncUI()}return} // prize rules / claim form: typing goes to the form
   if(state==='shop'){shopKey(e,k);return}
   var ae=document.activeElement;
   if((k==='Space'||k===' '||k==='Enter'||k==='NumpadEnter')&&ae&&ae.tagName==='BUTTON'&&state!=='play')return; // let a focused button handle it
@@ -1218,6 +1424,11 @@ var hook={get state(){return state},get score(){return score()},jump:jump,slide:
   attack:attack,get weapon(){return weapon()},weapons:WEAPONS,get shots(){return shots},get slash(){return slash},
   forceNext:function(ty){nextType=ty},forceAfter:function(ty){forceType=ty},
   warp:function(sc,spd){dist=sc*2;spawnGap=dist+4;obs.length=0;coins.length=0;if(spd)t=Math.max(0,(spd-BASE_SPEED)/0.12)},
+  get prizes(){return save.prizes},tiers:TIERS,nextTier:nextTier,unclaimedTier:unclaimedTier,normGcash:normGcash,
+  setScore:function(sc){dist=sc*2;coinCount=0;if(run)run.bonus=0;spawnGap=dist+4;obs.length=0;coins.length=0;return checkPrizes().map(function(x){return x.score})},
+  checkPrizes:function(){return checkPrizes().map(function(x){return x.score})},
+  openClaim:openClaim,openRules:openRules,closeModal:closeModal,get modal(){return modal&&modal.id},submitClaim:submitClaim,
+  setMailOpener:function(fn){mailOpener=fn},get lastMail(){return lastMail},claimMessage:function(sc,n,g){return claimMessage(tierOf(sc),n,g)},
   consts:{GRAV:GRAV,JUMP_V:JUMP_V,BOX3_H:BOX3_H,SHUR_EXTRA:SHUR_EXTRA,MIN_VIEW:MIN_VIEW,STACK3_PTS:STACK3_PTS,SHUR_PTS:SHUR_PTS}};
 window.__ninjaRunner=hook;window.__stickRunner=hook;
 })();
