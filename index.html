@@ -197,7 +197,7 @@ var AdService=(function(){
 (function(){
 'use strict';
 var cv=document.getElementById('c'),ctx=cv.getContext('2d');
-var W=0,H=0,DPR=1,U=1,GROUND=0,MIN_VIEW=24;
+var W=0,H=0,DPR=1,U=1,GROUND=0,MIN_VIEW=16,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
 var HS_KEY='ninjaRunnerHighScore',OLD_HS_KEY='stickRunnerHighScore';
 function loadHS(){try{return parseInt(localStorage.getItem(HS_KEY)||localStorage.getItem(OLD_HS_KEY)||'0',10)||0}catch(e){return 0}}
 function saveHS(v){try{localStorage.setItem(HS_KEY,String(v))}catch(e){}}
@@ -214,10 +214,16 @@ function resize(){
   cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
   U=Math.min(H/12,W/8);          // world unit scales with screen
-  // [view-fix-v7] narrow/portrait screens: zoom out so at least MIN_VIEW world units are visible
-  // horizontally (desktop 960x540 shows ~23.5), giving the same look-ahead / reaction time. Desktop (W/H>=1.6) unchanged.
-  if(W/H<1.6&&W/U<MIN_VIEW)U=W/MIN_VIEW;
-  GROUND=H*0.78;
+  // [view-fix-v8] narrow/portrait screens (W/H<1.6 and fewer than MIN_VIEW units across): zoom out only to
+  // MIN_VIEW=16 units (v7 used 24 -> ninja too small; original 8 -> too zoomed in). To keep reaction time,
+  // the player is moved left so >= REACT_SEC seconds of track at start speed are visible ahead
+  // (PX clamped 1.4..2.5). Portrait (W<H) also raises the ground line (0.78H -> 0.70H) for less empty sky.
+  // Desktop / landscape (W/H>=1.6) unchanged: PX=2.5, GROUND=0.78H.
+  PX=2.5;var narrow=W/H<1.6&&W/U<MIN_VIEW;
+  if(narrow){U=W/MIN_VIEW;PX=Math.max(1.4,Math.min(2.5,W/U-REACT_SEC*START_SPD))}
+  else if(W/H<1.6&&W/U<24)PX=Math.max(1.4,Math.min(2.5,W/U-REACT_SEC*START_SPD));
+  GROUND=H*(W<H?0.70:0.78);
+  if(p)p.x=PX;
   if(typeof sizePreview==='function'&&state==='shop')sizePreview();
 }
 window.addEventListener('resize',resize);
@@ -328,7 +334,7 @@ var BASE_SPEED=6,MAX_SPEED=16,GRAV=38,JUMP_V=-14.5,DJ_V=-14.5,SLIDE_TIME=0.65,MA
 var BOX_W=1.3,BOX_H=1.6;
 
 function reset(){
-  p={x:2.5,y:0,vy:0,onGround:true,slide:0,phase:0,jumps:0,djT:9};
+  p={x:PX,y:0,vy:0,onGround:true,slide:0,phase:0,jumps:0,djT:9};
   obs=[];coins=[];particles=[];trail=[];trailAcc=0;
   speed=BASE_SPEED;dist=0;coinCount=0;spawnGap=8;t=0;nextType=pickType(0);
   run={shield:0,magnet:0,inv:0,headDist:0,earned:0,banner:0,bannerTxt:'',rewarded:false};
@@ -394,6 +400,9 @@ function spawn(){
   var minSec=0.95;
   if(type==='stack')minSec=1.75;          // land from double jump, then react
   if(nextType==='stack')minSec=Math.max(minSec,1.5); // land previous + early take-off for stack
+  // [view-fix-v8] reduced view (narrow screens): the obstacle before a stack must be past the player
+  // before the stack scrolls into view, so the whole visible look-ahead is free for the stack
+  if(nextType==='stack'&&W/U<20)minSec=Math.max(minSec,(W/U-PX+o.w+1.5)/speed);
   var extra=Math.random()*(type==='stack'||nextType==='stack'?0.8:1.1);
   spawnGap=x+speed*(minSec+extra)+o.w-(W/U+2);
 }
