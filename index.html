@@ -197,7 +197,7 @@ var AdService=(function(){
 (function(){
 'use strict';
 var cv=document.getElementById('c'),ctx=cv.getContext('2d');
-var W=0,H=0,DPR=1,U=1,GROUND=0,MOBILE=false,MIN_VIEW=12.25,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
+var W=0,H=0,DPR=1,U=1,GROUND=0,MOBILE=false,MIN_VIEW=9.6,PX=2.5,REACT_SEC=2.42,START_SPD=6; // START_SPD must equal BASE_SPEED
 var HS_KEY='ninjaRunnerHighScore',OLD_HS_KEY='stickRunnerHighScore';
 function loadHS(){try{return parseInt(localStorage.getItem(HS_KEY)||localStorage.getItem(OLD_HS_KEY)||'0',10)||0}catch(e){return 0}}
 function saveHS(v){try{localStorage.setItem(HS_KEY,String(v))}catch(e){}}
@@ -217,8 +217,8 @@ function resize(){
   // [view-fix-v9] mobile view adjustments apply ONLY on real touch phones in portrait (touch input AND W<H
   // AND W<=500 CSS px). Every other device/window (desktop of any size/aspect) uses the original rules:
   // U=min(H/12,W/8), PX=2.5, GROUND=0.78H.
-  // On phones: zoom out to MIN_VIEW=12.25 units (v8 used 16; ninja ~70px tall at 390 wide), player moved
-  // left (PX = W/U-REACT_SEC*START_SPD clamped 1.4..2.5 -> 1.4 at 12.25 units, max look-ahead), ground 0.70H.
+  // On phones: MIN_VIEW=9.6 units across [view-fix-v10] (v9 used 12.25 ~70px ninja; now ~89px tall at 390 wide),
+  // player moved left (PX = W/U-REACT_SEC*START_SPD clamped 1.4..2.5 -> 1.4, max look-ahead), ground 0.70H.
   PX=2.5;GROUND=H*0.78;
   var touch=false;try{touch=(window.matchMedia&&matchMedia('(pointer: coarse)').matches)||('ontouchstart' in window)||(navigator.maxTouchPoints>0)}catch(e){}
   MOBILE=touch&&W<H&&W<=500;
