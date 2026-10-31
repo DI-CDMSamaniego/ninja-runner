@@ -197,7 +197,7 @@ var AdService=(function(){
 (function(){
 'use strict';
 var cv=document.getElementById('c'),ctx=cv.getContext('2d');
-var W=0,H=0,DPR=1,U=1,GROUND=0;
+var W=0,H=0,DPR=1,U=1,GROUND=0,MIN_VIEW=24;
 var HS_KEY='ninjaRunnerHighScore',OLD_HS_KEY='stickRunnerHighScore';
 function loadHS(){try{return parseInt(localStorage.getItem(HS_KEY)||localStorage.getItem(OLD_HS_KEY)||'0',10)||0}catch(e){return 0}}
 function saveHS(v){try{localStorage.setItem(HS_KEY,String(v))}catch(e){}}
@@ -214,6 +214,9 @@ function resize(){
   cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
   U=Math.min(H/12,W/8);          // world unit scales with screen
+  // [view-fix-v7] narrow/portrait screens: zoom out so at least MIN_VIEW world units are visible
+  // horizontally (desktop 960x540 shows ~23.5), giving the same look-ahead / reaction time. Desktop (W/H>=1.6) unchanged.
+  if(W/H<1.6&&W/U<MIN_VIEW)U=W/MIN_VIEW;
   GROUND=H*0.78;
   if(typeof sizePreview==='function'&&state==='shop')sizePreview();
 }
@@ -996,7 +999,7 @@ requestAnimationFrame(loop);
 
 // test hook
 var hook={get state(){return state},get score(){return score()},jump:jump,slide:slide,showAd:showAd,watchReward:watchReward,ads:AdService,
-  get player(){return p},get obstacles(){return obs},get coins(){return coins},get dist(){return dist},get speed(){return speed},get stage(){return STAGES[stageIdx].name},
+  get view(){return {W:W,H:H,U:U,GROUND:GROUND,units:W/U}},get player(){return p},get obstacles(){return obs},get coins(){return coins},get dist(){return dist},get speed(){return speed},get stage(){return STAGES[stageIdx].name},
   get save(){return save},get run(){return run},get hs(){return hs},setKeyDown:function(v){keys.down=v},start:handleStartRestart,
   openShop:openShop,closeShop:closeShop,goHome:goHome,activate:activate,share:share,gameUrl:gameUrl,shareText:shareText,items:ITEMS,stages:STAGES,
   addPoints:function(n){save.points+=n;persist();if(state==='shop')refreshShop();syncUI()},die:function(){if(state==='play')die()},
